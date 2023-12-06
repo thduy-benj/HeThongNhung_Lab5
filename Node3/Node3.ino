@@ -1,12 +1,13 @@
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-#include <ESP8266WiFi.h>
+///Khai báo mấy cái thư viện///////////////////////////////////////////////////////////////////////////////////////////////////////////
 #include <WiFiClient.h>
-#include <ESP8266WebServer.h>
-#include <ESP8266mDNS.h>
 #include <Arduino_JSON.h>
-
-MDNSResponder mdns;
-ESP8266WebServer server(80);
+#include "painlessMesh.h"
+#include <Arduino.h>
+#include <Hash.h>
+#include <ESPAsyncTCP.h>
+#include <ESPAsyncWebServer.h>
+///Điều khiển đèn///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+AsyncWebServer server(80);
 
 const char webpage[] PROGMEM = R"=====(
 <!DOCTYPE html>
@@ -34,9 +35,9 @@ const char webpage[] PROGMEM = R"=====(
   <br>
   <div class='container'>
     <h2>
-      Nhiệt độ(C): <span id="temp">0</span><br>
-      Độ ẩm(%): <span id="hum">0</span><br>
-      Ánh sáng(lx): <span id="lux">0</span><br>
+      Nhiệt độ(C): <span id="temperature">%TEMPERATURE%</span><br>
+      Độ ẩm(%): <span id="humidity">%HUMIDITY%</span><br>
+      Ánh sáng(lx): <span id="lux">%LUX%</span><br>
     </h2>
   </div>
 
@@ -53,6 +54,36 @@ const char webpage[] PROGMEM = R"=====(
       xhttp.open("GET", "/led_set?state=" + led_sts, true);
       xhttp.send();
     }
+    setInterval(function ( ) {
+      var xhttp = new XMLHttpRequest();
+      xhttp.onreadystatechange = function() {
+        if (this.readyState == 4 && this.status == 200) {
+          document.getElementById("lux").innerHTML = this.responseText;
+        }
+      };
+      xhttp.open("GET", "/lux", true);
+      xhttp.send();
+    }, 1000 );
+    setInterval(function ( ) {
+      var xhttp = new XMLHttpRequest();
+      xhttp.onreadystatechange = function() {
+        if (this.readyState == 4 && this.status == 200) {
+          document.getElementById("temperature").innerHTML = this.responseText;
+        }
+      };
+      xhttp.open("GET", "/temperature", true);
+      xhttp.send();
+    }, 1000 );
+    setInterval(function ( ) {
+      var xhttp = new XMLHttpRequest();
+      xhttp.onreadystatechange = function() {
+        if (this.readyState == 4 && this.status == 200) {
+          document.getElementById("humidity").innerHTML = this.responseText;
+        }
+      };
+      xhttp.open("GET", "/humidity", true);
+      xhttp.send();
+    }, 1000 );
   </script>
 </body>
 </html>
@@ -61,27 +92,17 @@ const char webpage[] PROGMEM = R"=====(
 int LED = D5;
 int ledState = LOW;
 
-void TrangChu()
-{
-  server.send(200, "text/html", webpage);
-}
-
-void led_control()
-{
-  String act_state = server.arg("state");
-  if (act_state == "1")
-  {
+void led_control(AsyncWebServerRequest *request) {
+  String act_state = request->arg("state");
+  if (act_state == "1") {
     digitalWrite(LED, HIGH);
-  }
-  else
-  {
+  } else {
     digitalWrite(LED, LOW);
   }
-  server.send(200, "text/plane", act_state);
+  request->send(200, "text/plain", act_state);
 }
-//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-#include "painlessMesh.h"
 
+///Nhận dữ liệu từ 2 node/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 #define   MESH_PREFIX     "NT131.O11.1"
 #define   MESH_PASSWORD   "Nhom01Mesh"
 #define   MESH_PORT       5555
@@ -104,25 +125,30 @@ void sendMessage() {
   taskSendMessage.setInterval( random( TASK_SECOND * 1, TASK_SECOND * 5 ));
 }
 
-// Needed for painless library
+// Lấy thông tin từ 2 node
+double lux = 0; 
+double hum = 0;
+double temp = 0;
 void receivedCallback(uint32_t from, String &msg) {
   Serial.printf("Received from %u msg=%s\n", from, msg.c_str());
   JSONVar myObject = JSON.parse(msg.c_str());
   int node = myObject["Node"];
-  // double temp = myObject["temp"];
-  // double hum = myObject["hum"];
-  double light = myObject["Data"]["Light"];
-  Serial.print("Node: ");
-  Serial.println(node);
+  if (node == 2 ) lux = myObject["Data"]["Light"];
+  else if (node == 1) {
+    temp = myObject["Data"]["Temp"];
+    hum = myObject["Data"]["Hum"];
+  }
+  // Serial.print("Node: ");
+  // Serial.println(node);
   // Serial.print("Temperature: ");
   // Serial.print(temp);
   // Serial.println(" C");
   // Serial.print("Humidity: ");
   // Serial.print(hum);
   // Serial.println(" %");
-  Serial.print("Light: ");
-  Serial.print(light);
-  Serial.println(" %");
+  // Serial.print("Light: ");
+  // Serial.print(light);
+  // Serial.println(" %");
 }
 
 void newConnectionCallback(uint32_t nodeId) {
@@ -136,6 +162,19 @@ void changedConnectionCallback() {
 void nodeTimeAdjustedCallback(int32_t offset) {
     Serial.printf("Adjusted time %u. Offset = %d\n", mesh.getNodeTime(),offset);
 }
+
+String processor(const String& var){
+  //Serial.println(var);
+  if(var == "TEMPERATURE"){
+    return String(temp);
+  } else if(var == "HUMIDITY"){
+    return String(hum);
+  } else if (var == "LUX"){
+    return String(lux);
+  }
+  return String();
+}
+
 
 void setup() {
   Serial.begin(115200);
@@ -167,14 +206,25 @@ void setup() {
   Serial.println("WiFi connected");
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
-  if (mdns.begin("esp8266", WiFi.localIP()))
-    Serial.println("MDNS responder started");
 
   // server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
   //   request->send(200, "text/html", webpage);
   // });
-  server.on("/", TrangChu);
-  server.on("/led_set", HTTP_GET, led_control);
+  server.on("/led_set", HTTP_POST, [](AsyncWebServerRequest *request){
+    led_control(request);
+  });
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send_P(200, "text/html", webpage, processor);
+  });
+  server.on("/temperature", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send_P(200, "text/plain", String(temp).c_str());
+  });
+  server.on("/humidity", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send_P(200, "text/plain", String(hum).c_str());
+  });
+  server.on("/lux", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send_P(200, "text/plain", String(lux).c_str());
+  });
 
   server.begin();
 }
@@ -182,5 +232,5 @@ void setup() {
 void loop() {
   // it will run the user scheduler as well
   mesh.update();
-  server.handleClient();
+  // server.handleClient();
 }
