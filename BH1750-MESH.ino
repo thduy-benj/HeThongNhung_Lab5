@@ -36,6 +36,7 @@ void sendMessage() {
   serializeJson(jsonDocument, message);
 
   // Gửi thông điệp broadcast
+  mesh.sendSingle(3, message);
   mesh.sendBroadcast(message);
 
   // Đặt khoảng thời gian cho thông điệp tiếp theo
