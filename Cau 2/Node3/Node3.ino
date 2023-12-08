@@ -35,9 +35,9 @@ const char webpage[] PROGMEM = R"=====(
   <br>
   <div class='container'>
     <h2>
-      Nhiệt độ(C): <span id="temperature">%TEMPERATURE%</span><br>
-      Độ ẩm(%): <span id="humidity">%HUMIDITY%</span><br>
-      Ánh sáng(lx): <span id="lux">%LUX%</span><br>
+      Nhiệt độ: <span id="temperature">%TEMPERATURE%</span><br>
+      Độ ẩm: <span id="humidity">%HUMIDITY%</span><br>
+      Ánh sáng: <span id="lux">%LUX%</span><br>
     </h2>
   </div>
 
@@ -63,7 +63,7 @@ const char webpage[] PROGMEM = R"=====(
       };
       xhttp.open("GET", "/lux", true);
       xhttp.send();
-    }, 1000 );
+    }, 5000 );
     setInterval(function ( ) {
       var xhttp = new XMLHttpRequest();
       xhttp.onreadystatechange = function() {
@@ -73,7 +73,7 @@ const char webpage[] PROGMEM = R"=====(
       };
       xhttp.open("GET", "/temperature", true);
       xhttp.send();
-    }, 1000 );
+    }, 5000 );
     setInterval(function ( ) {
       var xhttp = new XMLHttpRequest();
       xhttp.onreadystatechange = function() {
@@ -83,7 +83,7 @@ const char webpage[] PROGMEM = R"=====(
       };
       xhttp.open("GET", "/humidity", true);
       xhttp.send();
-    }, 1000 );
+    }, 5000 );
   </script>
 </body>
 </html>
@@ -138,17 +138,6 @@ void receivedCallback(uint32_t from, String &msg) {
     temp = myObject["Data"]["Temp"];
     hum = myObject["Data"]["Hum"];
   }
-  // Serial.print("Node: ");
-  // Serial.println(node);
-  // Serial.print("Temperature: ");
-  // Serial.print(temp);
-  // Serial.println(" C");
-  // Serial.print("Humidity: ");
-  // Serial.print(hum);
-  // Serial.println(" %");
-  // Serial.print("Light: ");
-  // Serial.print(light);
-  // Serial.println(" %");
 }
 
 void newConnectionCallback(uint32_t nodeId) {
@@ -207,12 +196,10 @@ void setup() {
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
 
-  // server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-  //   request->send(200, "text/html", webpage);
+  // server.on("/led_set", HTTP_GET, [](AsyncWebServerRequest *request){
+  //   request->send_P(200, "text/html", webpage);
   // });
-  server.on("/led_set", HTTP_POST, [](AsyncWebServerRequest *request){
-    led_control(request);
-  });
+  server.on("/led_set", HTTP_GET, led_control);
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/html", webpage, processor);
   });
@@ -232,5 +219,4 @@ void setup() {
 void loop() {
   // it will run the user scheduler as well
   mesh.update();
-  // server.handleClient();
 }
