@@ -120,31 +120,10 @@ const char webpage[] PROGMEM = R"=====(
 </body>
 </html>
 )=====";
-
-int LED1 = D5;
-int LED2 = D6;
-int LED3 = D7;
-int ledState = LOW;
+String act_state;
 
 void led_control(AsyncWebServerRequest *request) {
-  String act_state = request->arg("state");
-  if (act_state == "led1_on") {
-    digitalWrite(LED1, HIGH);
-  } else if (act_state == "led1_off") {
-    digitalWrite(LED1, LOW);
-  }
-
-  if (act_state == "led2_on") {
-    digitalWrite(LED2, HIGH);
-  } else if (act_state == "led2_off") {
-    digitalWrite(LED2, LOW);
-  }
-
-  if (act_state == "led3_on") {
-    digitalWrite(LED3, HIGH);
-  } else if (act_state == "led3_off") {
-    digitalWrite(LED3, LOW);
-  }
+  act_state = request->arg("state");
   request->send(200, "text/plain", act_state);
 }
 
@@ -165,10 +144,33 @@ void sendMessage() ; // Prototype so PlatformIO doesn't complain
 Task taskSendMessage( TASK_SECOND * 1 , TASK_FOREVER, &sendMessage );
 
 void sendMessage() {
-  String msg = "Hello from root node";
-  // msg += mesh.getNodeId();
-  mesh.sendBroadcast( msg );
-  taskSendMessage.setInterval( random( TASK_SECOND * 1, TASK_SECOND * 5 ));
+  int to_nodeId; // xác định node cần gửi
+  for (int i = 0; i < act_state.length(); i++){
+    if (act_state[i] == '1' || act_state[i] == '2'){
+      to_nodeId = 1;
+      break;
+    } else if (act_state[i] == '3'){
+      to_nodeId = 2;
+      break;
+    }
+  }
+
+  // Tạo một tài liệu JSON
+  StaticJsonDocument<256> jsonDocument;
+  JsonObject root = jsonDocument.to<JsonObject>();
+  root["Node"] = to_nodeId;
+  JsonObject data = root.createNestedObject("Data");
+  data["SetLED"] = act_state;
+
+  // Chuyển đổi JSON thành chuỗi
+  String message;
+  serializeJson(jsonDocument, message);
+
+  // Gửi thông điệp broadcast
+  mesh.sendBroadcast(message);
+
+  // Đặt khoảng thời gian cho thông điệp tiếp theo
+  taskSendMessage.setInterval(random(TASK_SECOND * 1, TASK_SECOND * 5));
 }
 
 // Lấy thông tin từ 2 node
@@ -226,10 +228,6 @@ void setup() {
   userScheduler.addTask( taskSendMessage );
   taskSendMessage.enable();
 
-  pinMode(LED1, OUTPUT);
-  pinMode(LED2, OUTPUT);
-  pinMode(LED3, OUTPUT);
-
   Serial.println();
   Serial.print("Connecting to ");
   WiFi.begin("UiTiOt-E3.1", "UiTiOtAP");
@@ -247,10 +245,10 @@ void setup() {
   // server.on("/led_set", HTTP_GET, [](AsyncWebServerRequest *request){
   //   request->send_P(200, "text/html", webpage);
   // });
-  server.on("/led_set", HTTP_POST, led_control);
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/html", webpage, processor);
   });
+  server.on("/led_set", HTTP_POST, led_control);
   server.on("/temperature", HTTP_POST, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/plain", String(temp).c_str());
   });

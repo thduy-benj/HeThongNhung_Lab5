@@ -63,7 +63,7 @@ const char webpage[] PROGMEM = R"=====(
       };
       xhttp.open("GET", "/lux", true);
       xhttp.send();
-    }, 5000 );
+    }, 1000 );
     setInterval(function ( ) {
       var xhttp = new XMLHttpRequest();
       xhttp.onreadystatechange = function() {
@@ -73,7 +73,7 @@ const char webpage[] PROGMEM = R"=====(
       };
       xhttp.open("GET", "/temperature", true);
       xhttp.send();
-    }, 5000 );
+    }, 1000 );
     setInterval(function ( ) {
       var xhttp = new XMLHttpRequest();
       xhttp.onreadystatechange = function() {
@@ -83,7 +83,7 @@ const char webpage[] PROGMEM = R"=====(
       };
       xhttp.open("GET", "/humidity", true);
       xhttp.send();
-    }, 5000 );
+    }, 1000 );
   </script>
 </body>
 </html>
@@ -176,9 +176,12 @@ void setup() {
   mesh.onNewConnection(&newConnectionCallback);
   mesh.onChangedConnections(&changedConnectionCallback);
   mesh.onNodeTimeAdjusted(&nodeTimeAdjustedCallback);
+  mesh.setRoot(true);
+  // This node and all other nodes should ideally know the mesh contains a root, so call this on all nodes
+  mesh.setContainsRoot(true);
 
-  userScheduler.addTask( taskSendMessage );
-  taskSendMessage.enable();
+  // userScheduler.addTask( taskSendMessage );
+  // taskSendMessage.enable();
 
   pinMode(LED, OUTPUT);
 
@@ -219,4 +222,5 @@ void setup() {
 void loop() {
   // it will run the user scheduler as well
   mesh.update();
+  // delay(1000);
 }
